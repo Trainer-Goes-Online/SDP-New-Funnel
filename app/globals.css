@@ -1,0 +1,58 @@
+/* ════════════════════════════════════════════════════════════════
+   SDP — globals.css
+   Design tokens + element resets. Page-specific styles live in
+   per-route files (checkout.css, landing.css, book-a-call.css).
+================================================================ */
+
+:root {
+  --brand:        #3B82F6;
+  --brand-bright: #60A5FA;
+  --brand-deep:   #1E40AF;
+  --cyan:         #22D3EE;
+
+  --bg:        #FFFFFF;
+  --bg-alt:    #F8FAFC;
+  --ink:       #0F172A;
+  --ink-soft:  #475569;
+  --muted:     #64748B;
+  --border:    #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  --success: #10B981;
+  --danger:  #DC2626;
+
+  --fh: 'Bebas Neue', 'Helvetica Neue', sans-serif;
+  --fb: 'Manrope', 'Helvetica Neue', sans-serif;
+
+  --r-sm: 8px;
+  --r:    12px;
+  --r-lg: 18px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--fb);
+  line-height: 1.6;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--brand); text-decoration: none; }
+img { max-width: 100%; height: auto; display: block; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ── Reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
