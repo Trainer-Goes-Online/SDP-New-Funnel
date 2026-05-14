@@ -1,0 +1,11 @@
+# Normalise line endings to LF on commit, regardless of platform.
+# Prevents Windows editors from introducing CRLF/BOM noise into diffs.
+* text=auto eol=lf
+
+*.css   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.html  text eol=lf
