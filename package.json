@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.0.0",
     "libphonenumber-js": "^1.11.12",
     "next": "^15.5.18",
     "razorpay": "^2.9.4",

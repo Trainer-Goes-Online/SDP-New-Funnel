@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Bebas_Neue, Manrope } from 'next/font/google';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 
 const bebasNeue = Bebas_Neue({
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <SpeedInsights />
         {process.env.NODE_ENV === 'production' && (
           <>
             {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
