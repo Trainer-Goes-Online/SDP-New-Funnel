@@ -375,6 +375,21 @@ export default function CheckoutForm() {
     const selectedCountry = COUNTRIES.find(c => c.code === countryCode) ?? COUNTRIES[0];
     const couponCode = appliedCoupon?.code;
 
+    // Meta Pixel: enrich session with user identity so subsequent events
+    // (e.g. PageView on thank-you) carry hashed advanced-matching data.
+    // The Pixel auto-hashes these values with SHA-256 before sending.
+    if (typeof window !== 'undefined' && window.fbq && process.env.NEXT_PUBLIC_META_PIXEL_ID) {
+      const phoneDigits = `${selectedCountry.dial}${fields.phone}`.replace(/\D/g, '');
+      window.fbq('init', process.env.NEXT_PUBLIC_META_PIXEL_ID, {
+        em: fields.email.trim().toLowerCase(),
+        ph: phoneDigits,
+        fn: fields.firstName.trim().toLowerCase(),
+        ln: fields.lastName.trim().toLowerCase(),
+        ct: fields.city.trim().toLowerCase().replace(/\s/g, ''),
+        country: selectedCountry.code.toLowerCase(),
+      });
+    }
+
     try {
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',

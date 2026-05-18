@@ -72,5 +72,6 @@ export interface RazorpayInstance {
 declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
+    fbq?: (...args: unknown[]) => void;
   }
 }
