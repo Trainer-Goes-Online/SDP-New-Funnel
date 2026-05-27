@@ -85,7 +85,7 @@ Add these three properties:
 
 | Property name | Value | Notes |
 |---|---|---|
-| `META_PIXEL_ID` | `1611587520198855` | Your existing pixel ID (matches Vercel's `NEXT_PUBLIC_META_PIXEL_ID`) |
+| `META_PIXEL_ID` | `937980699229718` | The dedicated SDP-funnel pixel (matches Vercel's `NEXT_PUBLIC_META_PIXEL_ID`). Use whatever value Vercel currently has — the two must always match. |
 | `META_CAPI_ACCESS_TOKEN` | `<your token>` | Same value as Vercel's `META_CAPI_ACCESS_TOKEN`. **Treat as a secret.** Anyone with edit access to this Apps Script can read it. |
 | `EVENT_SOURCE_URL_DEFAULT` | `https://sdp.sciencedrivenperformance.in/new-book-a-call` | Fallback if a row's `event_source_url` column is empty |
 
