@@ -1,58 +1,70 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Player from '@vimeo/player';
 import { useScrollReveal } from '@/components/shared/useScrollReveal';
 import { useConversionPush } from '@/components/shared/useConversionPush';
 
 /* Swap these two constants when the real thank-you video is ready. */
-const TY_VIDEO_URL = 'https://player.vimeo.com/video/1180466355';
+const TY_VIDEO_ID = 1180466355;
 const TY_VIDEO_THUMB = 'https://vumbnail.com/1180466355.jpg';
 
 function VSLVideo() {
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<Player | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  function handlePlay() {
-    if (playing) return;
-    setPlaying(true);
+  // See LandingPage VSLVideo: pre-boot the player, then play() synchronously
+  // inside the click so playback starts instantly AND with sound (no muting).
+  function ensurePlayer(): Player | null {
+    if (playerRef.current || !hostRef.current) return playerRef.current;
+    const player = new Player(hostRef.current, {
+      id: TY_VIDEO_ID,
+      autoplay: false,
+      muted: false,
+      playsinline: true,
+      responsive: false,
+    });
+    player.on('play', () => setPlaying(true));
+    playerRef.current = player;
+    return player;
   }
 
   useEffect(() => {
-    if (!playing || !wrapRef.current) return;
+    const host = hostRef.current;
+    if (!host) return;
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          ensurePlayer();
+          io.disconnect();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    io.observe(host);
+    return () => {
+      io.disconnect();
+      playerRef.current?.destroy().catch(() => {});
+      playerRef.current = null;
+    };
+  }, []);
 
-    const sep = TY_VIDEO_URL.indexOf('?') > -1 ? '&' : '?';
-    const src = `${TY_VIDEO_URL}${sep}autoplay=1&muted=0&playsinline=1&autopause=0&transparent=0`;
-
-    const iframe = document.createElement('iframe');
-    iframe.src = src;
-    iframe.setAttribute('frameborder', '0');
-    iframe.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
-    iframe.setAttribute('allowfullscreen', '');
-    iframe.setAttribute('playsinline', '');
-    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
-
-    iframe.addEventListener('load', () => {
-      const poke = () => {
-        try {
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'setMuted', value: false }), '*');
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'setVolume', value: 1 }), '*');
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'play' }), '*');
-        } catch { /* cross-origin */ }
-      };
-      poke();
-      setTimeout(poke, 250);
-      setTimeout(poke, 800);
-    });
-
-    wrapRef.current.innerHTML = '';
-    wrapRef.current.appendChild(iframe);
-  }, [playing]);
+  function handlePlay() {
+    if (playing) return;
+    const player = ensurePlayer();
+    if (!player) return;
+    player.setVolume(1).catch(() => {});
+    player
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => setPlaying(true));
+  }
 
   return (
     <div className="sdp-root" style={{ ['--bg' as string]: 'transparent', background: 'transparent' }}>
       <div className="sdp-video-frame" data-reveal style={{ ['--d' as string]: '.30s' }}>
         <div
-          ref={wrapRef}
           className={`sdp-video has-video${playing ? ' playing' : ''}`}
           role="button"
           tabIndex={0}
@@ -65,6 +77,7 @@ function VSLVideo() {
             }
           }}
         >
+          <div ref={hostRef} className="sdp-video-host" />
           {!playing && (
             <>
               <div className="sdp-video-thumb on" style={{ backgroundImage: `url("${TY_VIDEO_THUMB}")` }} />

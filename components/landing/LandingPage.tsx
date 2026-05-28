@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Image from 'next/image';
+import Player from '@vimeo/player';
 import { captureUtm, decorateHref } from '@/lib/utm';
 import { useScrollReveal } from '@/components/shared/useScrollReveal';
 import AnimatedCounter from '@/components/shared/AnimatedCounter';
@@ -176,54 +177,73 @@ function SiteHeader() {
 
 const HERO_MARKERS = ['HbA1c', 'Triglycerides', 'Blood Pressure', 'LDL Cholesterol'];
 const VSL_THUMB = '/vimeo-thumbs/1184772764.jpg';
-const VSL_URL = 'https://player.vimeo.com/video/1184772764';
+const VSL_ID = 1184772764;
 
 function VSLVideo() {
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<Player | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  function handlePlay() {
-    if (playing || !VSL_URL) return;
-    setPlaying(true);
+  // Boot the Vimeo player into `hostRef` once, on demand. Pre-booting (before
+  // the click) is what makes playback start instantly; calling play() later
+  // synchronously inside the click handler is what preserves the user gesture
+  // the browser requires to play WITH sound (no muting).
+  function ensurePlayer(): Player | null {
+    if (playerRef.current || !hostRef.current) return playerRef.current;
+    const player = new Player(hostRef.current, {
+      id: VSL_ID,
+      autoplay: false,
+      muted: false,
+      playsinline: true,
+      responsive: false,
+    });
+    player.on('play', () => setPlaying(true));
+    playerRef.current = player;
+    return player;
   }
 
+  // Pre-warm: boot the player as soon as the video scrolls near the viewport,
+  // so the heavy player cold-boot is done before the user ever clicks.
   useEffect(() => {
-    if (!playing || !wrapRef.current) return;
-
-    const sep = VSL_URL.indexOf('?') > -1 ? '&' : '?';
-    const src = `${VSL_URL}${sep}autoplay=1&muted=0&playsinline=1&autopause=0&transparent=0`;
-
-    const iframe = document.createElement('iframe');
-    iframe.src = src;
-    iframe.setAttribute('frameborder', '0');
-    iframe.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
-    iframe.setAttribute('allowfullscreen', '');
-    iframe.setAttribute('playsinline', '');
-    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
-
-    iframe.addEventListener('load', () => {
-      const poke = () => {
-        try {
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'setMuted', value: false }), '*');
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'setVolume', value: 1 }), '*');
-          iframe.contentWindow?.postMessage(JSON.stringify({ method: 'play' }), '*');
-        } catch {
-          /* cross-origin */
+    const host = hostRef.current;
+    if (!host) return;
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          ensurePlayer();
+          io.disconnect();
         }
-      };
-      poke();
-      setTimeout(poke, 250);
-      setTimeout(poke, 800);
-    });
+      },
+      { rootMargin: '300px' }
+    );
+    io.observe(host);
+    return () => {
+      io.disconnect();
+      playerRef.current?.destroy().catch(() => {});
+      playerRef.current = null;
+    };
+  }, []);
 
-    wrapRef.current.innerHTML = '';
-    wrapRef.current.appendChild(iframe);
-  }, [playing]);
+  function handlePlay() {
+    if (playing) return;
+    const player = ensurePlayer();
+    if (!player) return;
+    // Synchronous play() inside the gesture → Vimeo starts with sound.
+    player.setVolume(1).catch(() => {});
+    player
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => {
+        // Strict browser blocked programmatic unmuted play: reveal the booted
+        // player so the user can tap Vimeo's own button (in-iframe gesture →
+        // guaranteed sound). Never falls back to muted, never hangs.
+        setPlaying(true);
+      });
+  }
 
   return (
     <div className="sdp-video-frame" data-sdp-reveal style={{ ['--d' as string]: '.22s' }}>
       <div
-        ref={wrapRef}
         className={`sdp-video has-video${playing ? ' playing' : ''}`}
         id="sdp-vsl"
         role="button"
@@ -237,6 +257,7 @@ function VSLVideo() {
           }
         }}
       >
+        <div ref={hostRef} className="sdp-video-host" />
         {!playing && (
           <>
             <div className="sdp-video-thumb on">

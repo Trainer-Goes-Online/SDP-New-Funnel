@@ -397,6 +397,14 @@
   width:100%!important; height:100%!important;
   border:0!important; z-index:5!important;
 }
+/* Pre-booted Vimeo player host: fills the frame, sits BEHIND the poster, and
+   ignores pointer events until playback starts so the poster owns the click. */
+.sdp-root .sdp-video-host{ position:absolute; inset:0; z-index:1; pointer-events:none; }
+.sdp-root .sdp-video.playing .sdp-video-host{ z-index:5; pointer-events:auto; }
+.sdp-root .sdp-video-host iframe{
+  position:absolute!important; inset:0!important;
+  width:100%!important; height:100%!important; border:0!important;
+}
 .sdp-root .sdp-video-thumb{
   position:absolute; inset:0; z-index:2;
   background-size:cover; background-position:center;
