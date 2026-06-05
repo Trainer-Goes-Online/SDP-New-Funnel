@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import type { CustomerData, UtmData } from '@/lib/types';
 
 async function sendMetaCapiEvent(params: {
+  eventName: string;
   pixelId: string;
   accessToken: string;
   paymentId: string;
@@ -30,7 +31,7 @@ async function sendMetaCapiEvent(params: {
   const emailHash = normEmail ? sha256(normEmail) : undefined;
 
   const event = {
-    event_name: 'SDPPurchase',
+    event_name: params.eventName,
     event_time: Math.floor(Date.now() / 1000),
     event_id: params.paymentId,
     action_source: 'website',
@@ -221,27 +222,36 @@ export async function POST(req: NextRequest) {
     const metaAccessToken = process.env.META_CAPI_ACCESS_TOKEN;
     if (metaPixelId && metaAccessToken && !isTestBypass) {
       const fullPhone = `${customer.dialCode}${customer.phone}`;
-      try {
-        const capiResult = await sendMetaCapiEvent({
-          pixelId: metaPixelId,
-          accessToken: metaAccessToken,
-          paymentId,
-          email: customer.email,
-          phone: fullPhone,
-          firstName: customer.firstName,
-          lastName: customer.lastName,
-          city: customer.city,
-          country: customer.countryCode,
-          eventSourceUrl: resolvedEventSourceUrl,
-          fbc,
-          fbp,
-          clientIp,
-          clientUserAgent,
-        });
-        console.log('[verify-payment] Meta CAPI event sent:', capiResult);
-      } catch (err) {
-        console.error('[verify-payment] Meta CAPI error:', err);
-      }
+      const sharedPayload = {
+        pixelId: metaPixelId,
+        accessToken: metaAccessToken,
+        paymentId,
+        email: customer.email,
+        phone: fullPhone,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        city: customer.city,
+        country: customer.countryCode,
+        eventSourceUrl: resolvedEventSourceUrl,
+        fbc,
+        fbp,
+        clientIp,
+        clientUserAgent,
+      };
+      const eventNames = ['SDPPurchase', 'Purchase'];
+      const results = await Promise.allSettled(
+        eventNames.map((eventName) =>
+          sendMetaCapiEvent({ eventName, ...sharedPayload })
+        )
+      );
+      results.forEach((result, idx) => {
+        const eventName = eventNames[idx];
+        if (result.status === 'fulfilled') {
+          console.log(`[verify-payment] Meta CAPI "${eventName}" sent:`, result.value);
+        } else {
+          console.error(`[verify-payment] Meta CAPI "${eventName}" error:`, result.reason);
+        }
+      });
     } else {
       console.log('[verify-payment] Meta CAPI skipped — env vars not set or test bypass');
     }
