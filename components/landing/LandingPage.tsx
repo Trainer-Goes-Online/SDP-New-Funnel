@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Image from 'next/image';
+import Player from '@vimeo/player';
 import { captureUtm, decorateHref } from '@/lib/utm';
 import { useScrollReveal } from '@/components/shared/useScrollReveal';
 import AnimatedCounter from '@/components/shared/AnimatedCounter';
@@ -56,10 +57,14 @@ function SdpCta({
 
 function VideoModal({ videoUrl, onClose }: { videoUrl: string | null; onClose: () => void }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  // Testimonials are a mix of 16/9 and phone-shot 9/16, so the frame follows
+  // whatever the source turns out to be rather than assuming landscape.
+  const [portrait, setPortrait] = useState(false);
 
   useEffect(() => {
-    if (!videoUrl || !contentRef.current) return;
     const host = contentRef.current;
+    if (!videoUrl || !host) return;
+    setPortrait(false);
     host.innerHTML = '';
 
     const isMp4 = /\.mp4($|\?)/i.test(videoUrl);
@@ -70,12 +75,11 @@ function VideoModal({ videoUrl, onClose }: { videoUrl: string | null; onClose: (
       v.autoplay = true;
       v.playsInline = true;
       v.preload = 'auto';
+      v.volume = 1;
       v.setAttribute('controlsList', 'nodownload');
-      v.style.width = '100%';
-      v.style.height = '100%';
-      v.style.display = 'block';
-      v.style.background = '#000';
-      v.style.objectFit = 'contain';
+      v.addEventListener('loadedmetadata', () => {
+        setPortrait(v.videoHeight > v.videoWidth);
+      });
       host.appendChild(v);
       // The click that opened the modal is still a valid user gesture; try
       // unmuted play. If a strict browser blocks it, the native controls are
@@ -113,7 +117,15 @@ function VideoModal({ videoUrl, onClose }: { videoUrl: string | null; onClose: (
     document.body.style.overflow = 'hidden';
 
     return () => {
-      if (contentRef.current) contentRef.current.innerHTML = '';
+      // Pause and detach the source first: dropping the element alone can let
+      // MP4 audio keep playing after the modal closes.
+      const v = host.querySelector('video');
+      if (v) {
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      }
+      host.innerHTML = '';
       document.body.style.overflow = '';
     };
   }, [videoUrl]);
@@ -136,14 +148,14 @@ function VideoModal({ videoUrl, onClose }: { videoUrl: string | null; onClose: (
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="sdp-vmodal-shell">
+      <div className={`sdp-vmodal-shell${portrait ? ' is-portrait' : ''}`}>
         <button className="sdp-vmodal-close" type="button" aria-label="Close video" onClick={onClose}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <div ref={contentRef} className="sdp-vmodal-content" />
+        <div ref={contentRef} className={`sdp-vmodal-content${portrait ? ' is-portrait' : ''}`} />
       </div>
     </div>
   );
@@ -338,41 +350,84 @@ function SiteHeader() {
    ============================================================ */
 
 const HERO_MARKERS = ['HbA1c', 'Triglycerides', 'Blood Pressure', 'LDL Cholesterol'];
-const VSL_THUMB = '/vimeo-thumbs/1184772764.jpg';
-const VSL_URL =
-  'https://tgox-production-bucket.nyc3.cdn.digitaloceanspaces.com/client_funnel_videos/SDP/sdp_vsl_2nd_hook.mp4_v1%20(1080p).mp4';
+const VSL_THUMB = '/vimeo-thumbs/1209777174.jpg';
+const VSL_ID = 1209777174;
 
 function VSLVideo() {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<Player | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  function handlePlay() {
-    if (playing) return;
-    const v = videoRef.current;
-    if (!v) return;
-    // Synchronous play() inside the click gesture → starts with sound.
-    v.muted = false;
-    v.volume = 1;
-    v.play().then(() => setPlaying(true)).catch(() => setPlaying(true));
+  // Boot the Vimeo player into `hostRef` once, on demand. Pre-booting (before
+  // the click) is what makes playback start instantly; calling play() later
+  // synchronously inside the click handler is what preserves the user gesture
+  // the browser requires to play WITH sound (no muting).
+  function ensurePlayer(): Player | null {
+    if (playerRef.current || !hostRef.current) return playerRef.current;
+    const player = new Player(hostRef.current, {
+      id: VSL_ID,
+      autoplay: false,
+      muted: false,
+      playsinline: true,
+      responsive: false,
+      // dnt must stay false or Vimeo stops recording plays/engagement.
+      dnt: false,
+    });
+    player.on('play', () => setPlaying(true));
+    playerRef.current = player;
+    return player;
   }
 
+  // Pre-warm: boot the player as soon as the video scrolls near the viewport,
+  // so the heavy player cold-boot is done before the user ever clicks.
   useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          ensurePlayer();
+          io.disconnect();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    io.observe(host);
     // External trigger from the "Watch The Short Video Below" button: play
-    // unmuted and request fullscreen. Synchronous inside the button's click
-    // handler so the user-gesture context is preserved.
+    // unmuted and request fullscreen. Dispatched synchronously inside the
+    // button's click handler so the user-gesture context is preserved.
     const onExternalPlay = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      v.muted = false;
-      v.volume = 1;
-      v.play().then(() => setPlaying(true)).catch(() => setPlaying(true));
-      v.requestFullscreen().catch(() => {});
+      const player = ensurePlayer();
+      if (!player) return;
+      player.setVolume(1).catch(() => {});
+      player.play().then(() => setPlaying(true)).catch(() => setPlaying(true));
+      player.requestFullscreen().catch(() => {});
     };
     window.addEventListener('sdp:play-vsl-fullscreen', onExternalPlay);
     return () => {
+      io.disconnect();
       window.removeEventListener('sdp:play-vsl-fullscreen', onExternalPlay);
+      playerRef.current?.destroy().catch(() => {});
+      playerRef.current = null;
     };
   }, []);
+
+  function handlePlay() {
+    if (playing) return;
+    const player = ensurePlayer();
+    if (!player) return;
+    // Synchronous play() inside the gesture → Vimeo starts with sound.
+    player.setVolume(1).catch(() => {});
+    player
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => {
+        // Strict browser blocked programmatic unmuted play: reveal the booted
+        // player so the user can tap Vimeo's own button (in-iframe gesture →
+        // guaranteed sound). Never falls back to muted, never hangs.
+        setPlaying(true);
+      });
+  }
 
   return (
     <div className="sdp-video-frame" data-sdp-reveal style={{ ['--d' as string]: '.22s' }}>
@@ -390,18 +445,7 @@ function VSLVideo() {
           }
         }}
       >
-        <div className="sdp-video-host">
-          <video
-            ref={videoRef}
-            src={VSL_URL}
-            poster={VSL_THUMB}
-            preload="auto"
-            playsInline
-            controls={playing}
-            controlsList="nodownload"
-            onPlay={() => setPlaying(true)}
-          />
-        </div>
+        <div ref={hostRef} className="sdp-video-host" />
         {!playing && (
           <>
             <div className="sdp-video-thumb on">

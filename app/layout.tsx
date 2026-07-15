@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link
           rel="preload"
           as="image"
-          href="/vimeo-thumbs/1184772764.jpg"
+          href="/vimeo-thumbs/1209777174.jpg"
           fetchPriority="high"
         />
         <link rel="preconnect" href="https://player.vimeo.com" />
