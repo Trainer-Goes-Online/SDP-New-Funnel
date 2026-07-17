@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useScrollReveal } from '@/components/shared/useScrollReveal';
+import { trackGa4EventOnce } from '@/lib/ga4';
 
 /* ============================================================
    Helpers
@@ -173,7 +174,23 @@ function CalendlyEmbed() {
       }
     }, 200);
 
-    return () => window.clearInterval(poll);
+    // GA4 book_call — Calendly is embedded in an iframe so there is no
+    // button of ours to attach to. Calendly posts `event_scheduled` from
+    // its own origin when a slot is confirmed; origin-check it and fire
+    // once per browser.
+    function onCalendlyMessage(e: MessageEvent) {
+      if (!e.origin.endsWith('calendly.com')) return;
+      const data = e.data as { event?: string } | null;
+      if (data?.event === 'calendly.event_scheduled') {
+        trackGa4EventOnce('book_call');
+      }
+    }
+    window.addEventListener('message', onCalendlyMessage);
+
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('message', onCalendlyMessage);
+    };
   }, []);
 
   return (

@@ -7,6 +7,18 @@ import Player from '@vimeo/player';
 import { captureUtm, decorateHref } from '@/lib/utm';
 import { useScrollReveal } from '@/components/shared/useScrollReveal';
 import AnimatedCounter from '@/components/shared/AnimatedCounter';
+import { trackGa4EventOnce } from '@/lib/ga4';
+import { fireAddToCartOnce } from '@/lib/meta-client';
+
+// Fires GA4 `add_to_cart` (once per browser) and Meta CAPI AddToCart
+// (once per browser, via beacon that survives navigation). Attached to
+// every CTA anchor whose href points at the checkout page.
+function handleCtaClick() {
+  trackGa4EventOnce('add_to_cart');
+  fireAddToCartOnce(
+    typeof window !== 'undefined' ? window.location.href : ''
+  );
+}
 
 /* ============================================================
    Shared building blocks
@@ -38,7 +50,7 @@ function SdpCta({
       {...(reveal ? { 'data-sdp-reveal': '' } : {})}
       style={wrapStyle}
     >
-      <a href={href} className="sdp-cta">
+      <a href={href} className="sdp-cta" onClick={handleCtaClick}>
         <span className="cta-top">
           <span className="cta-d">Click Here To Get Your Personalised Diagnosis + Fitness Roadmap</span>
           <span className="cta-m">Click Here To Get Your Personalised Diagnosis + Fitness Roadmap</span>
@@ -373,7 +385,12 @@ function VSLVideo() {
       // dnt must stay false or Vimeo stops recording plays/engagement.
       dnt: false,
     });
-    player.on('play', () => setPlaying(true));
+    player.on('play', () => {
+      setPlaying(true);
+      // GA4 video_play — hero-scoped: VideoModal (testimonials) and the
+      // thank-you VSLVideo are separate components, so no cross-fire risk.
+      trackGa4EventOnce('video_play');
+    });
     playerRef.current = player;
     return player;
   }
@@ -1759,7 +1776,7 @@ function StickyBottomStrip() {
             </div>
           </div>
         </div>
-        <a href={href} className="sdp-cta">
+        <a href={href} className="sdp-cta" onClick={handleCtaClick}>
           <span className="cta-top">
             <span className="sdp-stuck-cta-text">
               <span>Click Here To Get Your Personalised Diagnosis</span>

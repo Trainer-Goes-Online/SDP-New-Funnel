@@ -8,6 +8,8 @@ import { COUPONS, ORIGINAL_PRICE_INR, PRICE_INR, fmtINR, type Coupon } from '@/l
 import { captureUtm, restoreUtm } from '@/lib/utm';
 import { validateFields, type FormErrors, type FormFields } from '@/lib/validation';
 import type { RazorpayFailureResponse, RazorpayResponse } from '@/lib/types';
+import { trackGa4EventOnce } from '@/lib/ga4';
+import { fireInitiateCheckoutOnce } from '@/lib/meta-client';
 
 /* ============================================================
    Sub-component: country code dropdown + phone input
@@ -362,6 +364,11 @@ export default function CheckoutForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    // GA4 initiate_checkout — v2.0 semantics: fire on the first Pay
+    // click regardless of validation. A half-filled bounce still counts
+    // as "user attempted to pay". Once per browser.
+    trackGa4EventOnce('initiate_checkout');
+
     setTouched({ firstName: true, lastName: true, email: true, city: true, phone: true });
     const allErrors = validateFields(fields, countryCode);
     setErrors(allErrors);
@@ -375,6 +382,26 @@ export default function CheckoutForm() {
     setLoading(true);
     const selectedCountry = COUNTRIES.find(c => c.code === countryCode) ?? COUNTRIES[0];
     const couponCode = appliedCoupon?.code;
+
+    // Meta CAPI InitiateCheckout — fires only on the real paid flow;
+    // the coupon-bypass path (100%-off / QA) is deliberately skipped so
+    // internal test attempts don't pollute Meta's event stream. Deduped
+    // per email per browser inside fireInitiateCheckoutOnce. Awaited so
+    // the SOP-mandated order (IC → create-order) is preserved.
+    if (!isBypass) {
+      await fireInitiateCheckoutOnce({
+        customer: {
+          firstName: fields.firstName,
+          lastName:  fields.lastName,
+          email:     fields.email,
+          phone:     fields.phone,
+          dialCode:  selectedCountry.dial,
+          city:      fields.city,
+          countryCode,
+        },
+        eventSourceUrl: typeof window !== 'undefined' ? window.location.href : '',
+      });
+    }
 
     try {
       const orderRes = await fetch('/api/razorpay/create-order', {
