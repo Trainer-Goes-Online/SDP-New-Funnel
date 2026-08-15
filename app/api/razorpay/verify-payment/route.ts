@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import type { CustomerData, UtmData } from '@/lib/types';
+import {
+  ATTR_COOKIE,
+  readAttrCookie,
+  resolveAttribution,
+  type AttrRecord,
+} from '@/lib/attribution';
 
 async function sendMetaCapiEvent(params: {
   eventName: string;
@@ -138,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     // Tracking signals hoisted so the same values feed both the Pabbly webhook
     // (Sheet row → Apps Script reads later) and the Meta CAPI fire below.
-    const fbc = req.cookies.get('_fbc')?.value;
+    const cookieFbcRaw = req.cookies.get('_fbc')?.value;
     const fbp = req.cookies.get('_fbp')?.value;
     const clientIp =
       req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
@@ -163,6 +169,46 @@ export async function POST(req: NextRequest) {
           .digest('hex')
       : '';
 
+    // L2/L3/L4/L6 — server-first attribution resolve. Cookie beats body
+    // (middleware wrote it before any hydration race); referrer parses
+    // rescue blank UTMs; `_fbc` reconstructs a full-length fbclid when
+    // the cookie was cleared. Referrer is NEVER a source for fbclid.
+    const attrCookie = readAttrCookie(req.cookies.get(ATTR_COOKIE)?.value);
+    const bodyAttr: AttrRecord = {
+      source:      utm?.source   ?? '',
+      medium:      utm?.medium   ?? '',
+      campaign:    utm?.campaign ?? '',
+      content:     utm?.content  ?? '',
+      term:        utm?.term     ?? '',
+      fbclid:      utm?.fbclid   ?? '',
+      gclid:       utm?.gclid    ?? '',
+      referrer:    utm?.referrer     ?? '',
+      landing_url: utm?.landing_path ?? '',
+      ts: 0,
+    };
+    const resolvedAttr = resolveAttribution({
+      cookieAttr: attrCookie,
+      bodyAttr,
+      referrer: utm?.referrer ?? '',
+      landingUrl: utm?.landing_path ?? '',
+      fbc: cookieFbcRaw ?? '',
+    });
+    // L4 payoff — synthesize the FB click cookie from stored parts so
+    // Meta gets a full-length fbclid even when the browser cookie was
+    // cleared between click and purchase.
+    const fbc =
+      cookieFbcRaw ||
+      (resolvedAttr.fbclid ? `fb.1.${resolvedAttr.fbclidTs}.${resolvedAttr.fbclid}` : '');
+
+    // Monitoring: real (non-test) orders should always resolve some
+    // attribution. If not, log LOUD so we notice before the media buyer.
+    if (!isTestBypass && resolvedAttr.utmSource === 'none' && resolvedAttr.clidSource === 'none') {
+      console.error('[verify-payment] ATTRIBUTION MISSING', {
+        paymentId,
+        provenance: resolvedAttr.provenance,
+      });
+    }
+
     const now = new Date();
     const pabblyPayload = {
       lead_id:           paymentId,
@@ -182,23 +228,23 @@ export async function POST(req: NextRequest) {
       payment_date:      now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       payment_time:      now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
       payment_timestamp: now.toISOString(),
-      utm_source:        utm?.source   ?? '',
-      utm_medium:        utm?.medium   ?? '',
-      utm_campaign:      utm?.campaign ?? '',
-      utm_content:       utm?.content  ?? '',
-      utm_term:          utm?.term     ?? '',
+      utm_source:        resolvedAttr.utm.source,
+      utm_medium:        resolvedAttr.utm.medium,
+      utm_campaign:      resolvedAttr.utm.campaign,
+      utm_content:       resolvedAttr.utm.content,
+      utm_term:          resolvedAttr.utm.term,
       utm_id:            utm?.utm_id   ?? '',
-      gclid:             utm?.gclid     ?? '',
-      fbclid:            utm?.fbclid    ?? '',
+      gclid:             resolvedAttr.gclid,
+      fbclid:            resolvedAttr.fbclid,
       msclkid:           utm?.msclkid   ?? '',
       ttclid:            utm?.ttclid    ?? '',
       li_fat_id:         utm?.li_fat_id ?? '',
       ref:               utm?.ref       ?? '',
-      referrer:          utm?.referrer     ?? '',
-      landing_path:      utm?.landing_path ?? '',
+      referrer:          resolvedAttr.referrer,
+      landing_path:      resolvedAttr.landingUrl,
       first_seen:        utm?.first_seen   ?? '',
       event_source_url:  resolvedEventSourceUrl,
-      fbc:               fbc ?? '',
+      fbc:               fbc,
       fbp:               fbp ?? '',
       external_id:       externalIdHash,
       client_ip_address: clientIp ?? '',
@@ -229,7 +275,10 @@ export async function POST(req: NextRequest) {
 
     const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? process.env.META_PIXEL_ID;
     const metaAccessToken = process.env.META_CAPI_ACCESS_TOKEN;
-    if (metaPixelId && metaAccessToken && !isTestBypass) {
+    // F8 hardening — match the /api/meta/* routes: never fire from dev
+    // or preview even if prod env vars leak, so the live dataset stays
+    // clean of test payments made from non-production hosts.
+    if (metaPixelId && metaAccessToken && !isTestBypass && process.env.NODE_ENV === 'production') {
       const fullPhone = `${customer.dialCode}${customer.phone}`;
       const sharedPayload = {
         pixelId: metaPixelId,
