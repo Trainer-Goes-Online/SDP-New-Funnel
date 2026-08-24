@@ -404,10 +404,24 @@ export default function CheckoutForm() {
     }
 
     try {
+      // Full customer + utm body so create-order can pack everything
+      // into Razorpay `notes` (webhook can't read cookies/headers).
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ couponCode }),
+        body: JSON.stringify({
+          couponCode,
+          customer: {
+            firstName: fields.firstName.trim(),
+            lastName:  fields.lastName.trim(),
+            email:     fields.email.trim(),
+            city:      fields.city.trim(),
+            phone:     fields.phone.trim(),
+            countryCode,
+            dialCode:  selectedCountry.dial,
+          },
+          utm: restoreUtm(),
+        }),
       });
 
       if (!orderRes.ok) {
@@ -477,36 +491,30 @@ export default function CheckoutForm() {
   async function handlePaymentSuccess(
     response: RazorpayResponse,
     dialCode: string,
-    couponCode?: string
+    _couponCode?: string
   ) {
     try {
       const utm = restoreUtm();
 
-      const verifyRes = await fetch('/api/razorpay/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId:   response.razorpay_order_id,
-          paymentId: response.razorpay_payment_id,
-          signature: response.razorpay_signature,
-          couponCode,
-          customer: {
-            firstName:   fields.firstName.trim(),
-            lastName:    fields.lastName.trim(),
-            email:       fields.email.trim(),
-            city:        fields.city.trim(),
-            phone:       fields.phone.trim(),
-            countryCode,
-            dialCode,
-          },
-          utm,
-          eventSourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
-        }),
-      });
-
-      const result = await verifyRes.json();
-      if (!result.success) {
-        throw new Error(result.error ?? 'Payment verification failed.');
+      // The Razorpay webhook is now the sole tracking authority (fires
+      // Pabbly + Meta CAPI server-to-server). This client call only
+      // verifies the HMAC signature to gate the redirect — no side
+      // effects. The bypass path has no real Razorpay signature to
+      // check, so it skips this and redirects straight through.
+      if (response.razorpay_signature) {
+        const verifyRes = await fetch('/api/razorpay/verify-signature', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId:   response.razorpay_order_id,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+          }),
+        });
+        const result = await verifyRes.json();
+        if (!result.valid) {
+          throw new Error(result.error ?? 'Payment verification failed.');
+        }
       }
 
       const tyParams = new URLSearchParams({

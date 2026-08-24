@@ -1,5 +1,6 @@
 // Edge-safe attribution primitives — no `node:crypto`, no DOM. Used by
-// both middleware.ts (Edge runtime) and the verify-payment route (Node).
+// middleware.ts (Edge runtime) and the create-order route (Node) to
+// resolve UTMs + fbclid + fbc before packing them into Razorpay notes.
 //
 // Two concerns are kept separate:
 //   ATTRIBUTION = last-touch  → utm_*, fbclid, gclid, ts
