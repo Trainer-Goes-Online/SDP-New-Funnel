@@ -337,6 +337,78 @@
 }
 .checkout-trust-sep { color: var(--border-strong); }
 
+/* ── Redirect-wait notice + booking consent ─────────────────────── */
+.checkout-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  background: rgba(59, 130, 246, .07);
+  border: 1px solid rgba(59, 130, 246, .28);
+  border-left: 4px solid var(--brand);
+  border-radius: var(--r);
+}
+.checkout-notice-icon { font-size: 18px; line-height: 1.5; flex: 0 0 auto; }
+.checkout-notice-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.checkout-notice-text strong { color: var(--brand-deep); font-weight: 700; }
+
+.checkout-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 16px;
+  padding: 13px 15px;
+  background: rgba(59, 130, 246, .06);
+  border: 1px solid rgba(59, 130, 246, .3);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.checkout-consent:hover { border-color: var(--brand); }
+.checkout-consent-box {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.checkout-consent-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.checkout-consent-text strong { color: var(--brand-deep); font-weight: 700; }
+.checkout-consent.err {
+  background: rgba(220, 38, 38, .06);
+  border-color: var(--danger);
+  animation: consentShake .4s ease;
+}
+@keyframes consentShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.checkout-consent-msg {
+  margin: -6px 0 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--danger);
+}
+@media (max-width: 480px) {
+  .checkout-notice { padding: 12px 13px; margin-bottom: 18px; }
+  .checkout-notice-text { font-size: 12.5px; }
+  .checkout-consent { padding: 12px 13px; }
+  .checkout-consent-text { font-size: 12.5px; }
+  .checkout-consent-box { width: 22px; height: 22px; } /* larger tap target on mobile */
+}
+
 /* ── Order summary ──────────────────────────────────────────────── */
 .checkout-summary {
   background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
