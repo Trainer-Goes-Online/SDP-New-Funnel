@@ -160,6 +160,12 @@ export async function POST(req: NextRequest) {
     external_id:       externalIdHash,
     client_ip_address: notes.ip,
     client_user_agent: notes.ua,
+    // L7 — provenance so a blank-utm row is diagnosable at a glance.
+    // Format: `utm:<layer>/<quality>|clid:<layer>` — e.g.
+    // `utm:cookie/ad|clid:cookie`. APPENDED at end of the schema so
+    // existing lifecycle columns don't shift — Apps Script COL map
+    // only needs one new entry, no re-indexing.
+    attribution_source: notes.pv,
   };
 
   // 7. Fire Pabbly (non-blocking; never throws to the response).

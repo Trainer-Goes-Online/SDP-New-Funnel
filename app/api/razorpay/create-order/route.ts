@@ -89,6 +89,7 @@ function buildBypassPabblyPayload(input: {
     external_id:       emailHash,
     client_ip_address: input.clientIp,
     client_user_agent: input.clientUserAgent,
+    attribution_source: input.resolved.provenance,
   };
 }
 

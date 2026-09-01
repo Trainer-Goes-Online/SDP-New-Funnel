@@ -24,7 +24,11 @@ export function middleware(req: NextRequest) {
       now: Date.now(),
     });
     if (changed) {
-      res.cookies.set(ATTR_COOKIE, encodeURIComponent(JSON.stringify(attr)), {
+      // F10 — pass RAW JSON. Next's cookies.set() already percent-encodes;
+      // wrapping with encodeURIComponent double-encodes (%7B → %257B), and
+      // the browser reader's single-decode then fails to parse and drops
+      // the cookie on the floor. See readAttrCookie for the legacy path.
+      res.cookies.set(ATTR_COOKIE, JSON.stringify(attr), {
         path: '/',
         maxAge: ATTR_TTL_SECONDS,
         sameSite: 'lax',
