@@ -297,6 +297,12 @@ export default function CheckoutForm() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; data: Coupon } | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
 
+  // Booking-awareness consent: users were paying then closing the tab before
+  // the post-payment redirect to the calendar, so their call never got booked.
+  // Payment is gated on this so they explicitly acknowledge the wait + redirect.
+  const [consent, setConsent] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+
   const discountPct = appliedCoupon?.data.discountPct ?? 0;
   const finalINR = Math.max(0, PRICE_INR - Math.round((PRICE_INR * discountPct) / 100));
   const isBypass = !!appliedCoupon?.data.bypassRazorpay && finalINR === 0;
@@ -372,10 +378,17 @@ export default function CheckoutForm() {
     setTouched({ firstName: true, lastName: true, email: true, city: true, phone: true });
     const allErrors = validateFields(fields, countryCode);
     setErrors(allErrors);
+    if (!consent) setConsentError(true);
 
     if (Object.keys(allErrors).length > 0) {
       const firstErrorKey = Object.keys(allErrors)[0] as keyof FormFields;
       document.getElementById(`field-${firstErrorKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Must acknowledge the post-payment wait + redirect before paying.
+    if (!consent) {
+      document.getElementById('checkout-consent')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -579,6 +592,16 @@ export default function CheckoutForm() {
             <h1 className="checkout-form-title">Your Details</h1>
           </div>
 
+          <div className="checkout-notice" role="note">
+            <span className="checkout-notice-icon" aria-hidden="true">⏳</span>
+            <p className="checkout-notice-text">
+              <strong>Important — don’t close this page after paying.</strong> The moment your
+              payment succeeds, please wait about <strong>2 minutes</strong> without closing or
+              refreshing. You’ll be redirected automatically to a calendar where you book your
+              call. Leaving early may stop your booking from being scheduled.
+            </p>
+          </div>
+
           <form onSubmit={handleSubmit} noValidate>
             <div className="checkout-fields">
               <div className="checkout-fields-row">
@@ -693,6 +716,32 @@ export default function CheckoutForm() {
             </div>
 
             <div className="checkout-submit-wrap">
+              <label
+                id="checkout-consent"
+                className={`checkout-consent${consentError ? ' err' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  className="checkout-consent-box"
+                  checked={consent}
+                  onChange={e => {
+                    setConsent(e.target.checked);
+                    if (e.target.checked) setConsentError(false);
+                  }}
+                  aria-invalid={consentError}
+                />
+                <span className="checkout-consent-text">
+                  I understand that after a successful payment I’ll be redirected to book my call,
+                  and I’ll keep this page open for up to <strong>2 minutes</strong> to complete my
+                  booking.
+                </span>
+              </label>
+              {consentError && (
+                <p className="checkout-consent-msg" role="alert">
+                  Please confirm you’ll wait for the redirect to book your call.
+                </p>
+              )}
+
               <button
                 type="submit"
                 className="cta"
