@@ -595,10 +595,11 @@ export default function CheckoutForm() {
           <div className="checkout-notice" role="note">
             <span className="checkout-notice-icon" aria-hidden="true">⏳</span>
             <p className="checkout-notice-text">
-              <strong>Important — don’t close this page after paying.</strong> The moment your
-              payment succeeds, please wait about <strong>2 minutes</strong> without closing or
-              refreshing. You’ll be redirected automatically to a calendar where you book your
-              call. Leaving early may stop your booking from being scheduled.
+              <strong>Important: please don’t close this page after paying.</strong> The moment
+              your payment succeeds, <strong>wait up to 10 seconds</strong> without closing or
+              refreshing this tab. You’ll then be taken automatically to the calendar to select
+              your <strong>preferred date and time</strong> and book your call.{' '}
+              <strong>Leaving early may stop your booking from being completed.</strong>
             </p>
           </div>
 
@@ -731,14 +732,15 @@ export default function CheckoutForm() {
                   aria-invalid={consentError}
                 />
                 <span className="checkout-consent-text">
-                  I understand that after a successful payment I’ll be redirected to book my call,
-                  and I’ll keep this page open for up to <strong>2 minutes</strong> to complete my
-                  booking.
+                  I understand that after payment, I’ll wait <strong>up to 10 seconds</strong> for
+                  the booking page to open, then select my <strong>preferred date and time</strong>
+                  to book my call.
                 </span>
               </label>
               {consentError && (
                 <p className="checkout-consent-msg" role="alert">
-                  Please confirm you’ll wait for the redirect to book your call.
+                  Please confirm you’ll stay on this page for up to 10 seconds to complete your
+                  call booking.
                 </p>
               )}
 
